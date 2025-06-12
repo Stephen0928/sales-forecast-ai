@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>銷售預測與補貨系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            padding: 30px;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin-bottom: 30px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        canvas {
+            background-color: white;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .download {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>銷售預測與補貨系統</h1>
+
+    <form method="POST">
+        <label for="product_name">商品名稱:</label>
+        <select id="product_name" name="product_name" required>
+            <option value="">請選擇</option>
+            {% for cat in product_categories %}
+                <option value="{{ cat }}" {% if cat == product_name %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+
+        <label for="current_inventory">目前庫存 (預設 5000):</label>
+        <input type="number" id="current_inventory" name="current_inventory" min="0" value="{{ request.form.current_inventory or 5000 }}">
+        <br><br>
+
+        <button type="submit">預測</button>
+    </form>
+
+    {% if prediction %}
+        <h2>預測銷售額（未來7天）</h2>
+
+        {% if prediction == "找不到該商品的銷售資料" %}
+            <p>{{ prediction }}</p>
+        {% else %}
+            <ul>
+                {% for day in prediction %}
+                    <li>{{ day }}</li>
+                {% endfor %}
+            </ul>
+
+            <h3>建議補貨量: <span style="color: green">{{ restock }}</span> 件</h3>
+
+            <div class="download">
+                <form method="POST" action="/download_csv">
+                    <input type="hidden" name="product_name" value="{{ product_name }}">
+                    <input type="hidden" name="current_inventory" value="{{ request.form.current_inventory or 5000 }}">
+                    <button type="submit">📥 下載預測 CSV</button>
+                </form>
+            </div>
+
+            <h3>過去30天 + 未來7天銷售額趨勢圖</h3>
+            <canvas id="salesChart" width="800" height="300"></canvas>
+
+            <script>
+                const historyData = {{ historical_vals | tojson }};
+                const predictionData = {{ prediction_vals | tojson }};
+
+                const fullLabels = [...Array(historyData.length).keys()].map(i => 'Day ' + (i + 1))
+                                    .concat([...Array(predictionData.length).keys()].map(i => 'Day +' + (i + 1)));
+
+                const historySeries = historyData.concat(Array(predictionData.length).fill(NaN));
+                const forecastSeries = Array(historyData.length).fill(NaN).concat(predictionData);
+
+                const ctx = document.getElementById('salesChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: fullLabels,
+                        datasets: [
+                            {
+                                label: '歷史銷售額（過去30天）',
+                                data: historySeries,
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                borderWidth: 2,
+                                tension: 0.2,
+                                fill: false,
+                                spanGaps: false,
+                                pointRadius: 3
+                            },
+                            {
+                                label: '預測銷售額（未來7天）',
+                                data: forecastSeries,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                borderWidth: 2,
+                                tension: 0.2,
+                                fill: false,
+                                spanGaps: false,
+                                pointRadius: 3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                title: {
+                                    display: true,
+                                    text: '金額'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '日期'
+                                }
+                            }
+                        }
+                    }
+                });
+            </script>
+        {% endif %}
+    {% endif %}
+</body>
+</html>

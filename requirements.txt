@@ -1,0 +1,8 @@
+flask
+pandas
+numpy
+scikit-learn
+tensorflow
+gunicorn
+jinja2
+services:
